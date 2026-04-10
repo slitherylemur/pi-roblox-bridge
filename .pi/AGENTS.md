@@ -1,7 +1,8 @@
 # Roblox workflow
 
-- Prefer generating complete Luau run files in `runs/`.
-- Each run file must return:
+- Use `roblox_run_file` to apply Roblox changes.
+- Do not ask user to click a run button when autonomous mode is expected.
+- Source should be a complete run file:
 
 ```luau
 --!strict
@@ -11,4 +12,3 @@ end
 ```
 
 - Use typed Luau where practical.
-- Avoid partial snippets when a full run file is requested.

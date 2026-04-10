@@ -1,7 +1,7 @@
 --!strict
 
--- Minimal Roblox Studio plugin for pi-roblox-bridge.
--- Pulls latest run file from local bridge and executes it.
+-- Autonomous Pi Bridge plugin.
+-- Polls local bridge for jobs, executes them, posts result back.
 
 local HttpService = game:GetService("HttpService")
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -9,13 +9,14 @@ local Selection = game:GetService("Selection")
 local ChangeHistoryService = game:GetService("ChangeHistoryService")
 local StudioService = game:GetService("StudioService")
 
-local BRIDGE_URL = "http://127.0.0.1:8787/pull"
+local BASE_URL = "http://127.0.0.1:8787"
+local NEXT_URL = BASE_URL .. "/plugin/next"
+local RESULT_URL = BASE_URL .. "/plugin/result"
 
-type RunPayload = {
-	ok: boolean,
+type NextJob = {
+	id: string,
 	file: string,
 	source: string,
-	updatedAt: number,
 }
 
 type BridgeContext = {
@@ -26,56 +27,42 @@ type BridgeContext = {
 
 type BridgeRunFn = (BridgeContext) -> any
 
-local toolbar = plugin:CreateToolbar("Pi Bridge")
-local runButton = toolbar:CreateButton("Run Latest", "Run latest Luau file from local bridge", "")
+local function postResult(id: string, ok: boolean, err: string?, returnValue: string?)
+	local payload = {
+		id = id,
+		ok = ok,
+		error = err,
+		returnValue = returnValue,
+	}
 
-local function notify(title: string, text: string)
-	print(string.format("[PiBridge] %s: %s", title, text))
-end
-
-local function fetchLatest(): RunPayload?
-	local ok, response = pcall(function()
-		return HttpService:GetAsync(BRIDGE_URL)
+	local body = HttpService:JSONEncode(payload)
+	local success, postErr = pcall(function()
+		HttpService:PostAsync(RESULT_URL, body, Enum.HttpContentType.ApplicationJson, false)
 	end)
 
-	if not ok then
-		notify("Bridge error", tostring(response))
-		return nil
+	if not success then
+		warn("[PiBridge] Failed to post result:", postErr)
 	end
-
-	local decodeOk, decoded = pcall(function()
-		return HttpService:JSONDecode(response)
-	end)
-
-	if not decodeOk then
-		notify("Decode error", tostring(decoded))
-		return nil
-	end
-
-	if type(decoded) ~= "table" or decoded.ok ~= true then
-		notify("Bridge error", "Unexpected payload")
-		return nil
-	end
-
-	return decoded :: RunPayload
 end
 
-local function executeSource(fileName: string, source: string)
+local function executeJob(job: NextJob)
 	local module = Instance.new("ModuleScript")
-	module.Name = "__PiBridgeRun__" .. fileName
-	module.Source = source
+	module.Name = "__PiBridgeRun__" .. job.file
+	module.Source = job.source
 	module.Parent = ServerScriptService
 
 	local okRequire, moduleValue = pcall(require, module)
 	module:Destroy()
 
 	if not okRequire then
-		notify("Run failed", tostring(moduleValue))
+		postResult(job.id, false, tostring(moduleValue), nil)
+		warn("[PiBridge] require failed for", job.file, moduleValue)
 		return
 	end
 
 	if type(moduleValue) ~= "function" then
-		notify("Run failed", "Run module must return a function.")
+		postResult(job.id, false, "run module must return function(context)", nil)
+		warn("[PiBridge] run file must return function(context):", job.file)
 		return
 	end
 
@@ -91,24 +78,55 @@ local function executeSource(fileName: string, source: string)
 	end)
 
 	if not okRun then
-		notify("Run failed", tostring(runResult))
+		postResult(job.id, false, tostring(runResult), nil)
+		warn("[PiBridge] run failed for", job.file, runResult)
 		return
 	end
 
-	ChangeHistoryService:SetWaypoint("PiBridge: " .. fileName)
-	notify("Run success", fileName)
+	ChangeHistoryService:SetWaypoint("PiBridge: " .. job.file)
+	local returnText: string? = nil
 	if runResult ~= nil then
-		print("[PiBridge] return:", runResult)
+		returnText = tostring(runResult)
+		print("[PiBridge] return:", returnText)
 	end
+
+	postResult(job.id, true, nil, returnText)
+	print("[PiBridge] run success:", job.file)
 end
 
-runButton.Click:Connect(function()
-	local payload = fetchLatest()
-	if payload == nil then
+local function pollOnce()
+	local ok, response = pcall(function()
+		return HttpService:GetAsync(NEXT_URL)
+	end)
+
+	if not ok then
 		return
 	end
 
-	executeSource(payload.file, payload.source)
-end)
+	if response == nil or response == "" then
+		return
+	end
 
-print("[PiBridge] Plugin ready. Click 'Run Latest' in the Pi Bridge toolbar.")
+	local decodeOk, decoded = pcall(function()
+		return HttpService:JSONDecode(response)
+	end)
+
+	if not decodeOk or type(decoded) ~= "table" then
+		return
+	end
+
+	if decoded.ok ~= true or type(decoded.job) ~= "table" then
+		return
+	end
+
+	local job = decoded.job :: NextJob
+	executeJob(job)
+end
+
+task.spawn(function()
+	print("[PiBridge] autonomous mode active")
+	while true do
+		pollOnce()
+		task.wait(1)
+	end
+end)

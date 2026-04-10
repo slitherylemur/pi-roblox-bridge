@@ -1,8 +1,8 @@
 # pi-roblox-bridge
 
-Minimal bridge: **terminal-generated Luau files** -> **run inside Roblox Studio**.
+Minimal bridge: **terminal-generated Luau files** -> **auto-run inside Roblox Studio**.
 
-No complex protocol. The bridge simply serves the newest run file from `./runs`, and a Roblox plugin pulls + executes it.
+No complex protocol. Agent submits a run job, plugin polls bridge, executes automatically, and posts result back.
 
 ## Why this design
 
@@ -13,9 +13,9 @@ No complex protocol. The bridge simply serves the newest run file from `./runs`,
 
 ## Project structure
 
-- `src/index.ts` - local bridge server
-- `roblox/PiBridge.plugin.lua` - Studio plugin script
-- `runs/*.luau` - generated run files (what the agent writes)
+- `src/index.ts` - local bridge server (job queue + result API)
+- `roblox/PiBridge.plugin.lua` - Studio plugin script (autonomous polling)
+- `runs/*.luau` - generated run files (archived run payloads)
 
 ## Quick start
 
@@ -26,16 +26,17 @@ npm run dev
 
 Bridge:
 - `GET /health`
-- `GET /files`
-- `GET /pull` (returns latest `.luau` / `.lua` from `runs/`)
+- `POST /agent/run` (enqueue run)
+- `GET /agent/result/:id` (poll run result)
+- `GET /plugin/next` (plugin gets next job)
+- `POST /plugin/result` (plugin posts completion)
 
 ## Roblox plugin install (minimal)
 
-1. Open Roblox Studio.
-2. Create a new plugin script.
-3. Paste `roblox/PiBridge.plugin.lua` contents.
-4. Make sure Studio can call localhost HTTP.
-5. Click **Pi Bridge -> Run Latest**.
+1. Put `roblox/PiBridge.plugin.lua` in `%LOCALAPPDATA%/Roblox/Plugins`.
+2. Open Roblox Studio.
+3. Ensure local HTTP is allowed in Studio.
+4. Plugin auto-polls every second (no button click required).
 
 ## Run file contract (important)
 
@@ -60,10 +61,10 @@ If a file does not return a function, plugin execution is rejected.
 
 ## Typical terminal workflow
 
-1. Ask your agent to create a new file in `runs/` (e.g. `runs/2026-04-10_add_spawn.luau`).
-2. In Studio, click **Run Latest**.
-3. Verify changes.
-4. If needed, generate a new run file and run again.
+1. Ask agent to call `roblox_run_file` with full Luau source.
+2. Bridge queues run.
+3. Studio plugin auto-executes.
+4. Agent receives success/failure + return value.
 
 ## Notes
 
