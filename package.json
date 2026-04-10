@@ -1,0 +1,38 @@
+{
+  "name": "pi-roblox-bridge",
+  "version": "0.1.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "check": "tsc --noEmit"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "description": "Minimal open-source bridge between Pi agent and Roblox Studio",
+  "private": "false",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/slitherylemur/pi-roblox-bridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/slitherylemur/pi-roblox-bridge/issues"
+  },
+  "homepage": "https://github.com/slitherylemur/pi-roblox-bridge#readme",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}
