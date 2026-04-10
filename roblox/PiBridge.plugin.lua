@@ -24,15 +24,12 @@ type BridgeContext = {
 	studio: StudioService,
 }
 
-type BridgeRunFn = (BridgeContext) -> ()
+type BridgeRunFn = (BridgeContext) -> any
 
 local toolbar = plugin:CreateToolbar("Pi Bridge")
 local runButton = toolbar:CreateButton("Run Latest", "Run latest Luau file from local bridge", "")
 
 local function notify(title: string, text: string)
-	pcall(function()
-		plugin:CreatePopupMenu()
-	end)
 	print(string.format("[PiBridge] %s: %s", title, text))
 end
 
@@ -89,17 +86,20 @@ local function executeSource(fileName: string, source: string)
 		studio = StudioService,
 	}
 
-	local okRun, runError = pcall(function()
-		runFn(context)
+	local okRun, runResult = pcall(function()
+		return runFn(context)
 	end)
 
 	if not okRun then
-		notify("Run failed", tostring(runError))
+		notify("Run failed", tostring(runResult))
 		return
 	end
 
 	ChangeHistoryService:SetWaypoint("PiBridge: " .. fileName)
 	notify("Run success", fileName)
+	if runResult ~= nil then
+		print("[PiBridge] return:", runResult)
+	end
 end
 
 runButton.Click:Connect(function()

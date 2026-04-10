@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const RUNS_DIR = path.join(process.cwd(), "runs");
@@ -10,26 +10,6 @@ function sanitizeFileName(input: string): string {
   const safe = trimmed.replace(/[^a-zA-Z0-9._-]/g, "-");
   if (safe.endsWith(".luau") || safe.endsWith(".lua")) return safe;
   return `${safe}.luau`;
-}
-
-async function getLatestRun(): Promise<{ file: string; source: string } | null> {
-  await mkdir(RUNS_DIR, { recursive: true });
-  const entries = await readdir(RUNS_DIR, { withFileTypes: true });
-  const files = await Promise.all(
-    entries
-      .filter((e) => e.isFile() && (e.name.endsWith(".luau") || e.name.endsWith(".lua")))
-      .map(async (e) => {
-        const absolute = path.join(RUNS_DIR, e.name);
-        const info = await stat(absolute);
-        return { file: e.name, absolute, mtime: info.mtimeMs };
-      }),
-  );
-
-  if (files.length === 0) return null;
-  files.sort((a, b) => b.mtime - a.mtime);
-  const latest = files[0];
-  const source = await readFile(latest.absolute, "utf8");
-  return { file: latest.file, source };
 }
 
 export default function (pi: ExtensionAPI) {
@@ -58,24 +38,6 @@ export default function (pi: ExtensionAPI) {
           { type: "text", text: `Wrote run file: runs/${fileName}\nNow click 'Pi Bridge -> Run Latest' in Roblox Studio.` },
         ],
         details: { file: `runs/${fileName}` },
-      };
-    },
-  });
-
-  pi.registerTool({
-    name: "roblox_read_latest_run_file",
-    label: "Roblox Read Latest Run File",
-    description: "Read the newest run file from ./runs.",
-    parameters: Type.Object({}),
-    async execute() {
-      const latest = await getLatestRun();
-      if (!latest) {
-        return { content: [{ type: "text", text: "No run files found in ./runs" }], details: {} };
-      }
-
-      return {
-        content: [{ type: "text", text: `Latest: runs/${latest.file}\n\n${latest.source}` }],
-        details: { file: `runs/${latest.file}` },
       };
     },
   });
